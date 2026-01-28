@@ -1,6 +1,6 @@
 import pc from 'picocolors';
 import { getConfig, saveConfig } from '../../lib/config';
-import { getModelSuggestions, KNOWN_MODELS } from '../../lib/models';
+import { getModelSuggestions, getModelSuggestionsAsync, KNOWN_MODELS, getAvailableModels } from '../../lib/models';
 
 type Agent = 'claude' | 'gemini' | 'codex' | 'ollama';
 
@@ -19,16 +19,59 @@ export function modelShowCommand(): void {
   console.log();
 }
 
-export function modelListCommand(agent?: string): void {
+export async function modelListCommand(agent?: string): Promise<void> {
   if (agent) {
-    const suggestions = getModelSuggestions(agent);
-    if (suggestions.length === 0) {
-      console.log(pc.yellow(`No known models for agent: ${agent}`));
-      return;
-    }
-    console.log(pc.bold(`\nAvailable models for ${agent}:\n`));
-    for (const model of suggestions) {
-      console.log(`  ${model}`);
+    console.log(pc.bold(`\nFetching available models for ${agent}...\n`));
+
+    try {
+      // Try to get models from API first
+      const models = await getAvailableModels(agent);
+      const suggestions = await getModelSuggestionsAsync(agent);
+
+      if (models.length === 0 && suggestions.length === 0) {
+        console.log(pc.yellow(`No known models for agent: ${agent}`));
+        return;
+      }
+
+      console.log(pc.bold(`Available models for ${agent}:\n`));
+
+      // Show aliases if any
+      const agentModels = KNOWN_MODELS[agent];
+      if (agentModels && agentModels.aliases.length > 0) {
+        console.log(pc.cyan('Aliases:'));
+        for (const alias of agentModels.aliases) {
+          console.log(`  ${alias}`);
+        }
+        console.log();
+      }
+
+      // Show models
+      if (models.length > 0) {
+        console.log(pc.cyan('Models:'));
+        for (const model of models) {
+          let line = `  ${model.id}`;
+          if (model.name && model.name !== model.id) {
+            line += pc.dim(` (${model.name})`);
+          }
+          console.log(line);
+        }
+      } else {
+        console.log(pc.cyan('Models:'));
+        for (const model of suggestions) {
+          console.log(`  ${model}`);
+        }
+      }
+    } catch (error) {
+      console.error(pc.red(`Error fetching models: ${error}`));
+
+      // Fallback to known models
+      const suggestions = getModelSuggestions(agent);
+      if (suggestions.length > 0) {
+        console.log(pc.yellow('\nFalling back to known models:\n'));
+        for (const model of suggestions) {
+          console.log(`  ${model}`);
+        }
+      }
     }
   } else {
     console.log(pc.bold('\nAvailable models by agent:\n'));
@@ -47,7 +90,7 @@ export function modelListCommand(agent?: string): void {
   }
 }
 
-export function modelSetCommand(agent: string, model: string): void {
+export async function modelSetCommand(agent: string, model: string): Promise<void> {
   const validAgents: Agent[] = ['claude', 'gemini', 'codex', 'ollama'];
 
   if (!validAgents.includes(agent as Agent)) {
@@ -60,10 +103,14 @@ export function modelSetCommand(agent: string, model: string): void {
   const agentKey = agent as Agent;
 
   // Warn if unknown model
-  const suggestions = getModelSuggestions(agent);
-  if (suggestions.length > 0 && !suggestions.includes(model)) {
-    console.log(pc.yellow(`Warning: "${model}" is not a known model for ${agent}`));
-    console.log(pc.dim(`Known models: ${suggestions.join(', ')}`));
+  try {
+    const suggestions = await getModelSuggestionsAsync(agent);
+    if (suggestions.length > 0 && !suggestions.includes(model)) {
+      console.log(pc.yellow(`Warning: "${model}" is not a known model for ${agent}`));
+      console.log(pc.dim(`Known models: ${suggestions.slice(0, 10).join(', ')}${suggestions.length > 10 ? '...' : ''}`));
+    }
+  } catch {
+    // Ignore errors, just skip validation
   }
 
   // Update config

@@ -1,6 +1,27 @@
 import { execa } from 'execa';
 import type { Adapter, ModelResponse, RunOptions } from '../lib/types';
-import { getConfig } from '../lib/config';
+import { getConfig, getSecret } from '../lib/config';
+
+/**
+ * Get environment variables for Codex CLI based on configured secret
+ */
+function getCodexEnv(): Record<string, string> {
+  const config = getConfig();
+  const env: Record<string, string> = {};
+
+  if (config.adapters.codex.secretName) {
+    const secret = getSecret(config.adapters.codex.secretName);
+    if (secret) {
+      // Codex CLI uses OPENAI_API_KEY environment variable
+      env.OPENAI_API_KEY = secret.apiKey;
+      if (secret.url) {
+        env.OPENAI_API_URL = secret.url;
+      }
+    }
+  }
+
+  return env;
+}
 
 export const codexAdapter: Adapter = {
   name: 'codex',
@@ -46,7 +67,8 @@ export const codexAdapter: Adapter = {
           timeout: config.timeout,
           cancelSignal: options?.signal,
           reject: false,
-          stdin: 'ignore'
+          stdin: 'ignore',
+          env: { ...process.env, ...getCodexEnv() }
         }
       );
 

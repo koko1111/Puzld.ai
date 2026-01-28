@@ -1,14 +1,38 @@
 import { Ollama } from 'ollama';
 import type { Adapter, ModelResponse, RunOptions } from '../lib/types';
-import { getConfig } from '../lib/config';
+import { getConfig, getSecret } from '../lib/config';
 
 let ollamaClient: Ollama | null = null;
+let lastConfigHash: string | null = null;
+
+function getConfigHash(): string {
+  const config = getConfig();
+  return `${config.adapters.ollama.host}:${config.adapters.ollama.secretName || ''}`;
+}
 
 function getOllama(): Ollama {
-  if (!ollamaClient) {
+  const configHash = getConfigHash();
+
+  if (!ollamaClient || lastConfigHash !== configHash) {
     const config = getConfig();
-    ollamaClient = new Ollama({ host: config.adapters.ollama.host });
+    let host = config.adapters.ollama.host;
+    const headers: Record<string, string> = {};
+
+    // Use secret if configured
+    if (config.adapters.ollama.secretName) {
+      const secret = getSecret(config.adapters.ollama.secretName);
+      if (secret) {
+        host = secret.url;
+        if (secret.apiKey) {
+          headers['Authorization'] = `Bearer ${secret.apiKey}`;
+        }
+      }
+    }
+
+    ollamaClient = new Ollama({ host, headers });
+    lastConfigHash = configHash;
   }
+
   return ollamaClient;
 }
 

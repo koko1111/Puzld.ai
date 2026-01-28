@@ -1,11 +1,33 @@
 import { execa } from 'execa';
 import type { Adapter, ModelResponse, RunOptions } from '../lib/types';
-import { getConfig } from '../lib/config';
+import { getConfig, getSecret } from '../lib/config';
 
 // Extended options for Gemini with approval mode
 export interface GeminiRunOptions extends RunOptions {
   /** Gemini CLI approval mode: 'default' (read-only), 'auto_edit', 'yolo' */
   geminiApprovalMode?: 'default' | 'auto_edit' | 'yolo';
+}
+
+/**
+ * Get environment variables for Gemini CLI based on configured secret
+ */
+function getGeminiEnv(): Record<string, string> {
+  const config = getConfig();
+  const env: Record<string, string> = {};
+
+  if (config.adapters.gemini.secretName) {
+    const secret = getSecret(config.adapters.gemini.secretName);
+    if (secret) {
+      // Gemini CLI uses GOOGLE_API_KEY or GEMINI_API_KEY environment variable
+      env.GEMINI_API_KEY = secret.apiKey;
+      env.GOOGLE_API_KEY = secret.apiKey;
+      if (secret.url) {
+        env.GEMINI_API_URL = secret.url;
+      }
+    }
+  }
+
+  return env;
 }
 
 export const geminiAdapter: Adapter = {
@@ -54,7 +76,8 @@ export const geminiAdapter: Adapter = {
           timeout: config.timeout,
           cancelSignal: options?.signal,
           reject: false,
-          stdin: 'ignore'
+          stdin: 'ignore',
+          env: { ...process.env, ...getGeminiEnv() }
         }
       );
 

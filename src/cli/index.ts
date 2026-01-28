@@ -31,6 +31,14 @@ import {
   modelSetCommand,
   modelClearCommand
 } from './commands/model';
+import {
+  secretsAddCommand,
+  secretsListCommand,
+  secretsShowCommand,
+  secretsRemoveCommand,
+  secretsLinkCommand,
+  secretsUnlinkCommand
+} from './commands/secrets';
 import { indexCommand } from './commands/indexing';
 import {
   observeSummaryCommand,
@@ -167,6 +175,45 @@ modelCmd
   .command('clear <agent>')
   .description('Clear model override for an agent (use CLI default)')
   .action(modelClearCommand);
+
+// Secrets subcommands
+const secretsCmd = program
+  .command('secrets')
+  .description('Manage API secrets and credentials');
+
+secretsCmd
+  .command('add [name]')
+  .description('Add a new API secret')
+  .option('-u, --url <url>', 'API URL')
+  .option('-k, --api-key <key>', 'API Key')
+  .option('-p, --provider <provider>', 'Provider (claude, gemini, codex, ollama, mistral, custom)')
+  .option('-d, --description <desc>', 'Description')
+  .action((name, opts) => secretsAddCommand(name, opts));
+
+secretsCmd
+  .command('list')
+  .description('List all configured secrets')
+  .action(secretsListCommand);
+
+secretsCmd
+  .command('show <name>')
+  .description('Show a specific secret (including decrypted API key)')
+  .action(secretsShowCommand);
+
+secretsCmd
+  .command('remove <name>')
+  .description('Remove a secret')
+  .action(secretsRemoveCommand);
+
+secretsCmd
+  .command('link <agent> <secret>')
+  .description('Link a secret to an agent')
+  .action(secretsLinkCommand);
+
+secretsCmd
+  .command('unlink <agent>')
+  .description('Unlink a secret from an agent')
+  .action(secretsUnlinkCommand);
 
 // Template subcommands
 const templateCmd = program

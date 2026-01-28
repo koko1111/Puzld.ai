@@ -1,6 +1,27 @@
 import { execa } from 'execa';
 import type { Adapter, ModelResponse, RunOptions } from '../lib/types';
-import { getConfig } from '../lib/config';
+import { getConfig, getSecret } from '../lib/config';
+
+/**
+ * Get environment variables for Mistral CLI based on configured secret
+ */
+function getMistralEnv(): Record<string, string> {
+  const config = getConfig();
+  const env: Record<string, string> = {};
+
+  if (config.adapters.mistral?.secretName) {
+    const secret = getSecret(config.adapters.mistral.secretName);
+    if (secret) {
+      // Mistral CLI (vibe) uses MISTRAL_API_KEY environment variable
+      env.MISTRAL_API_KEY = secret.apiKey;
+      if (secret.url) {
+        env.MISTRAL_API_URL = secret.url;
+      }
+    }
+  }
+
+  return env;
+}
 
 export const mistralAdapter: Adapter = {
   name: 'mistral',
@@ -44,7 +65,8 @@ export const mistralAdapter: Adapter = {
           timeout: config.timeout,
           cancelSignal: options?.signal,
           reject: false,
-          stdin: 'ignore'
+          stdin: 'ignore',
+          env: { ...process.env, ...getMistralEnv() }
         }
       );
 

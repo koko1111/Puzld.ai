@@ -1,4 +1,7 @@
 import { execSync } from 'child_process';
+import { getConfig, getSecret } from './config';
+import { getCachedModels } from './api-client';
+import type { ModelInfo } from './api-client';
 
 export interface AgentModels {
   aliases: string[];
@@ -86,6 +89,28 @@ export function isModelAlias(agent: string, model: string): boolean {
   return agentModels.aliases.includes(model);
 }
 
+// Load models from API for an agent
+export async function loadModelsFromApi(agent: string): Promise<string[]> {
+  try {
+    const config = getConfig();
+    const agentConfig = config.adapters[agent as keyof typeof config.adapters];
+
+    if (!agentConfig || !('secretName' in agentConfig) || !agentConfig.secretName) {
+      return [];
+    }
+
+    const secret = getSecret(agentConfig.secretName);
+    if (!secret) {
+      return [];
+    }
+
+    const models = await getCachedModels(agentConfig.secretName, secret.provider || agent);
+    return models.map(m => m.id);
+  } catch {
+    return [];
+  }
+}
+
 // Get all suggestions for autocomplete (aliases first, then full names)
 export function getModelSuggestions(agent: string): string[] {
   const agentModels = KNOWN_MODELS[agent];
@@ -97,4 +122,54 @@ export function getModelSuggestions(agent: string): string[] {
   }
 
   return [...agentModels.aliases, ...agentModels.models];
+}
+
+// Get all suggestions including API models (async version)
+export async function getModelSuggestionsAsync(agent: string): Promise<string[]> {
+  const agentModels = KNOWN_MODELS[agent];
+  if (!agentModels) return [];
+
+  // For ollama, load dynamically
+  if (agent === 'ollama') {
+    return loadOllamaModels();
+  }
+
+  // Try to load from API first
+  const apiModels = await loadModelsFromApi(agent);
+  if (apiModels.length > 0) {
+    // Combine API models with known aliases (aliases first)
+    return [...agentModels.aliases, ...apiModels];
+  }
+
+  // Fallback to known models
+  return [...agentModels.aliases, ...agentModels.models];
+}
+
+// Get all available models for an agent (including API models)
+export async function getAvailableModels(agent: string): Promise<ModelInfo[]> {
+  try {
+    const config = getConfig();
+    const agentConfig = config.adapters[agent as keyof typeof config.adapters];
+
+    if (!agentConfig || !('secretName' in agentConfig) || !agentConfig.secretName) {
+      // Return known models as ModelInfo objects
+      const agentModels = KNOWN_MODELS[agent];
+      if (!agentModels) return [];
+
+      return agentModels.models.map(id => ({ id }));
+    }
+
+    const secret = getSecret(agentConfig.secretName);
+    if (!secret) {
+      return [];
+    }
+
+    return await getCachedModels(agentConfig.secretName, secret.provider || agent);
+  } catch {
+    // Fallback to known models
+    const agentModels = KNOWN_MODELS[agent];
+    if (!agentModels) return [];
+
+    return agentModels.models.map(id => ({ id }));
+  }
 }

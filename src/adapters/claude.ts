@@ -1,6 +1,6 @@
 import { execa } from 'execa';
 import type { Adapter, ModelResponse, RunOptions } from '../lib/types';
-import { getConfig } from '../lib/config';
+import { getConfig, getSecret } from '../lib/config';
 import { StreamParser, type ResultEvent } from '../lib/stream-parser';
 import { extractProposedEdits, type ProposedEdit } from '../lib/edit-review';
 
@@ -11,6 +11,28 @@ export interface DryRunResult {
   response: ModelResponse;
   proposedEdits: ProposedEdit[];
   resultEvent: ResultEvent | null;
+}
+
+/**
+ * Get environment variables for Claude CLI based on configured secret
+ */
+function getClaudeEnv(): Record<string, string> {
+  const config = getConfig();
+  const env: Record<string, string> = {};
+
+  if (config.adapters.claude.secretName) {
+    const secret = getSecret(config.adapters.claude.secretName);
+    if (secret) {
+      // Claude CLI uses ANTHROPIC_API_KEY environment variable
+      env.ANTHROPIC_API_KEY = secret.apiKey;
+      if (secret.url) {
+        // Claude CLI might support custom API endpoint
+        env.ANTHROPIC_API_URL = secret.url;
+      }
+    }
+  }
+
+  return env;
 }
 
 export const claudeAdapter: Adapter & {
@@ -58,7 +80,8 @@ export const claudeAdapter: Adapter & {
           timeout: config.timeout,
           cancelSignal: options?.signal,
           reject: false,
-          stdin: 'ignore'
+          stdin: 'ignore',
+          env: { ...process.env, ...getClaudeEnv() }
         }
       );
 
@@ -155,7 +178,8 @@ export const claudeAdapter: Adapter & {
           timeout: config.timeout,
           cancelSignal: options?.signal,
           reject: false,
-          stdin: 'ignore'
+          stdin: 'ignore',
+          env: { ...process.env, ...getClaudeEnv() }
         }
       );
 
