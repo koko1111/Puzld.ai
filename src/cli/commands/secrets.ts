@@ -1,5 +1,6 @@
 import pc from 'picocolors';
 import { addSecret, getSecret, listSecrets, removeSecret, getConfig, saveConfig } from '../../lib/config';
+import { ApiClient } from '../../lib/api-client';
 import { createInterface } from 'readline';
 import type { SecretConfig } from '../../lib/config';
 
@@ -184,4 +185,78 @@ export function secretsUnlinkCommand(agent: string): void {
   saveConfig(config);
 
   console.log(pc.green(`✓ Unlinked secret from agent "${agent}"`));
+}
+
+export async function secretsTestCommand(name: string): Promise<void> {
+  const secret = getSecret(name);
+
+  if (!secret) {
+    console.error(pc.red(`Secret "${name}" not found`));
+    process.exit(1);
+  }
+
+  console.log(pc.bold(`\nTesting connection to ${name}...\n`));
+  console.log(`  URL: ${secret.url}`);
+
+  try {
+    const client = new ApiClient({
+      url: secret.url,
+      apiKey: secret.apiKey
+    });
+
+    const connected = await client.testConnection();
+
+    if (connected) {
+      console.log(pc.green('\n✓ Connection successful'));
+    } else {
+      console.log(pc.red('\n✗ Connection failed'));
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error(pc.red(`\n✗ Error: ${error}`));
+    process.exit(1);
+  }
+}
+
+export async function secretsModelsCommand(name: string): Promise<void> {
+  const secret = getSecret(name);
+
+  if (!secret) {
+    console.error(pc.red(`Secret "${name}" not found`));
+    process.exit(1);
+  }
+
+  console.log(pc.bold(`\nFetching models from ${name}...\n`));
+  console.log(`  URL: ${secret.url}`);
+  console.log(`  Provider: ${secret.provider || 'custom'}\n`);
+
+  try {
+    const client = new ApiClient({
+      url: secret.url,
+      apiKey: secret.apiKey
+    });
+
+    const models = await client.fetchModels(secret.provider);
+
+    if (models.length === 0) {
+      console.log(pc.yellow('No models found'));
+      return;
+    }
+
+    console.log(pc.bold(`Available Models (${models.length}):\n`));
+
+    for (const model of models) {
+      let line = `  ${pc.cyan(model.id)}`;
+      if (model.name && model.name !== model.id) {
+        line += pc.dim(` - ${model.name}`);
+      }
+      if (model.description) {
+        line += pc.dim(` (${model.description})`);
+      }
+      console.log(line);
+    }
+  } catch (error) {
+    console.error(pc.red(`\nError fetching models: ${error}`));
+    process.exit(1);
+  }
 }

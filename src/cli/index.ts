@@ -37,7 +37,9 @@ import {
   secretsShowCommand,
   secretsRemoveCommand,
   secretsLinkCommand,
-  secretsUnlinkCommand
+  secretsUnlinkCommand,
+  secretsTestCommand,
+  secretsModelsCommand
 } from './commands/secrets';
 import { indexCommand } from './commands/indexing';
 import {
@@ -214,6 +216,16 @@ secretsCmd
   .command('unlink <agent>')
   .description('Unlink a secret from an agent')
   .action(secretsUnlinkCommand);
+
+secretsCmd
+  .command('test <name>')
+  .description('Test connection to a secret')
+  .action(secretsTestCommand);
+
+secretsCmd
+  .command('models <name>')
+  .description('Query available models from a secret')
+  .action(secretsModelsCommand);
 
 // Template subcommands
 const templateCmd = program
